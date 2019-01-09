@@ -100,7 +100,7 @@ func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, 
 
 	maxvolumes := 22
 	if len(instance.Status.VolumesInUse) >= maxvolumes && !nodeHasTaint(instance, "Volumes-full") {
-		logger.Info("Attached volumes reached limit, tainting node with NoSchedule...")
+		logger.Info("Attached volumes reached limit, tainting node with NoSchedule...", "Node", instance)
 		instance.Spec.Taints = append(instance.Spec.Taints, corev1.Taint{
 			Key:    "Volumes-full",
 			Value:  "true",
@@ -111,7 +111,7 @@ func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, 
 			return reconcile.Result{}, err
 		}
 	} else if len(instance.Status.VolumesInUse) < maxvolumes && nodeHasTaint(instance, "Volumes-full") {
-		logger.Info("Attached volumes below limit, untainting node...")
+		logger.Info("Attached volumes below limit, untainting node...", "Node", instance)
 		i := 0
 		for _, taint := range instance.Spec.Taints {
 			if taint.Key == "Volumes-full" {
