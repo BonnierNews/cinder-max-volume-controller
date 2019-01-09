@@ -98,45 +98,42 @@ func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, 
 		return reconcile.Result{}, err
 	}
 
-	//logger.Info("Got node", "Node", instance)
-	//logger.Info("Volumes", "volumesInUse", len(instance.Status.VolumesInUse))
-
 	maxvolumes := 22
 	if len(instance.Status.VolumesInUse) >= maxvolumes && !nodeHasTaint(instance, "Volumes-full") {
 		logger.Info("Attached volumes reached limit, tainting node with NoSchedule...")
 		instance.Spec.Taints = append(instance.Spec.Taints, corev1.Taint{
-                    Key:    "Volumes-full",
-                    Value:  "true",
-                    Effect: corev1.TaintEffectNoSchedule,
-                })
+			Key:    "Volumes-full",
+			Value:  "true",
+			Effect: corev1.TaintEffectNoSchedule,
+		})
 		err = r.Update(context.TODO(), instance)
-        if err != nil {
+		if err != nil {
 			return reconcile.Result{}, err
 		}
 	} else if len(instance.Status.VolumesInUse) < maxvolumes && nodeHasTaint(instance, "Volumes-full") {
 		logger.Info("Attached volumes below limit, untainting node...")
 		i := 0
 		for _, taint := range instance.Spec.Taints {
-        	if taint.Key == "Volumes-full" {
-        		instance.Spec.Taints = append(instance.Spec.Taints[:i], instance.Spec.Taints[i+1:]...)
-            	break
-        	}
-        	i++
-    	}
+			if taint.Key == "Volumes-full" {
+				instance.Spec.Taints = append(instance.Spec.Taints[:i], instance.Spec.Taints[i+1:]...)
+				break
+			}
+			i++
+		}
 		err = r.Update(context.TODO(), instance)
-        if err != nil {
+		if err != nil {
 			return reconcile.Result{}, err
 		}
 	}
-	
+
 	return reconcile.Result{}, nil
 }
 
 func nodeHasTaint(node *corev1.Node, taintKey string) bool {
-    for _, taint := range node.Spec.Taints {
-        if taint.Key == taintKey {
-            return true
-        }
-    }
-    return false
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == taintKey {
+			return true
+		}
+	}
+	return false
 }
