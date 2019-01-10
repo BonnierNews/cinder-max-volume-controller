@@ -17,6 +17,7 @@ package node
 
 import (
 	"context"
+	"os"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -98,6 +99,7 @@ func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, 
 		return reconcile.Result{}, err
 	}
 
+	dryrun := os.Getenv("DRY_RUN")
 	maxvolumes := 22
 	if len(instance.Status.VolumesInUse) >= maxvolumes && !nodeHasTaint(instance, "Volumes-full") {
 		logger.Info("Attached volumes reached limit, tainting node with NoSchedule...", "Node", instance)
@@ -106,9 +108,11 @@ func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, 
 			Value:  "true",
 			Effect: corev1.TaintEffectNoSchedule,
 		})
-		err = r.Update(context.TODO(), instance)
-		if err != nil {
-			return reconcile.Result{}, err
+		if dryrun != "true" {
+			err = r.Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	} else if len(instance.Status.VolumesInUse) < maxvolumes && nodeHasTaint(instance, "Volumes-full") {
 		logger.Info("Attached volumes below limit, untainting node...", "Node", instance)
@@ -120,9 +124,11 @@ func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, 
 			}
 			i++
 		}
-		err = r.Update(context.TODO(), instance)
-		if err != nil {
-			return reconcile.Result{}, err
+		if dryrun != "true" {
+			err = r.Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 
