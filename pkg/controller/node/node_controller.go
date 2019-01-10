@@ -101,12 +101,12 @@ func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, 
 
 	dryrun := os.Getenv("DRY_RUN")
 	maxvolumes := 22
-	if len(instance.Status.VolumesInUse) >= maxvolumes && !nodeHasTaint(instance, "Volumes-full") {
-		logger.Info("Attached volumes reached limit, tainting node with NoSchedule...", "Node", instance)
+	if len(instance.Status.VolumesInUse) >= maxvolumes && !nodeHasTaint(instance, "cinder-pv-full") {
+		logger.Info("Attached volumes reached limit, tainting node with PreferNoSchedule...", "Node", instance)
 		instance.Spec.Taints = append(instance.Spec.Taints, corev1.Taint{
-			Key:    "Volumes-full",
+			Key:    "cinder-pv-full",
 			Value:  "true",
-			Effect: corev1.TaintEffectNoSchedule,
+			Effect: corev1.TaintEffectPreferNoSchedule,
 		})
 		if dryrun != "true" {
 			err = r.Update(context.TODO(), instance)
@@ -114,11 +114,11 @@ func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, 
 				return reconcile.Result{}, err
 			}
 		}
-	} else if len(instance.Status.VolumesInUse) < maxvolumes && nodeHasTaint(instance, "Volumes-full") {
+	} else if len(instance.Status.VolumesInUse) < maxvolumes && nodeHasTaint(instance, "cinder-pv-full") {
 		logger.Info("Attached volumes below limit, untainting node...", "Node", instance)
 		i := 0
 		for _, taint := range instance.Spec.Taints {
-			if taint.Key == "Volumes-full" {
+			if taint.Key == "cinder-pv-full" {
 				instance.Spec.Taints = append(instance.Spec.Taints[:i], instance.Spec.Taints[i+1:]...)
 				break
 			}
