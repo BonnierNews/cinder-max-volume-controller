@@ -17,6 +17,7 @@ package node
 
 import (
 	"context"
+	"os"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -83,7 +84,7 @@ type ReconcileNode struct {
 // and what is in the Node.Spec
 // TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
 // a Deployment as an example
-// +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;update
 func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the Node instance
 	instance := &corev1.Node{}
@@ -97,7 +98,48 @@ func (r *ReconcileNode) Reconcile(request reconcile.Request) (reconcile.Result, 
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-	logger.Info("Got node", "Node", instance)
-	logger.Info("Volumes", "volumesInUse", len(instance.Status.VolumesInUse))
+
+	dryrun := os.Getenv("DRY_RUN")
+	maxvolumes := 22
+	if len(instance.Status.VolumesInUse) >= maxvolumes && !nodeHasTaint(instance, "Volumes-full") {
+		logger.Info("Attached volumes reached limit, tainting node with NoSchedule...", "Node", instance)
+		instance.Spec.Taints = append(instance.Spec.Taints, corev1.Taint{
+			Key:    "Volumes-full",
+			Value:  "true",
+			Effect: corev1.TaintEffectNoSchedule,
+		})
+		if dryrun != "true" {
+			err = r.Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+	} else if len(instance.Status.VolumesInUse) < maxvolumes && nodeHasTaint(instance, "Volumes-full") {
+		logger.Info("Attached volumes below limit, untainting node...", "Node", instance)
+		i := 0
+		for _, taint := range instance.Spec.Taints {
+			if taint.Key == "Volumes-full" {
+				instance.Spec.Taints = append(instance.Spec.Taints[:i], instance.Spec.Taints[i+1:]...)
+				break
+			}
+			i++
+		}
+		if dryrun != "true" {
+			err = r.Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+	}
+
 	return reconcile.Result{}, nil
+}
+
+func nodeHasTaint(node *corev1.Node, taintKey string) bool {
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == taintKey {
+			return true
+		}
+	}
+	return false
 }
